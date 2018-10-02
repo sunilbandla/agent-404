@@ -1,0 +1,26 @@
+{
+  "name": "agent-404",
+  "version": "1.0.0",
+  "description": "A game for 404 page",
+  "main": "index.html",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "gh-pages -d src"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sunilbandla/agent-404.git"
+  },
+  "keywords": [
+    "babylonjs"
+  ],
+  "author": "sunilbandla@gmail.com",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sunilbandla/agent-404/issues"
+  },
+  "homepage": "https://github.com/sunilbandla/agent-404#readme",
+  "devDependencies": {
+    "gh-pages": "^2.0.0"
+  }
+}

@@ -87,26 +87,18 @@
             ground.material = groundMaterial;
             ground.checkCollisions = true;
 
-            // var crosshair = BABYLON.Mesh.CreateBox(`crosshair1`, 10, scene);
-            var crosshair = BABYLON.Mesh.CreateDisc("crosshair1", 5, 100, scene, false);
+            var crosshair = BABYLON.Mesh.CreateDisc("crosshair1", 8, 100, scene, false);
             crosshair.position = new BABYLON.Vector3(20, 20, 20);
             crosshair.material = new BABYLON.StandardMaterial('crosshair1', scene);
             crosshair.material.diffuseColor = BABYLON.Color3.White();
-            crosshair.material.alpha = 0.9;
             crosshair.material.diffuseTexture =
                 new BABYLON.Texture("textures/favicon.png", scene);
             crosshair.material.diffuseTexture.hasAlpha = true;
             crosshair.material.useAlphaFromDiffuseTexture = true;
-            crosshair.material.emissiveColor = BABYLON.Color3.White();
+            crosshair.material.emissiveColor = BABYLON.Color3.Red();
             crosshair.material.disableLighting = true;
             crosshair.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
 
-            var box1 = BABYLON.Mesh.CreateBox("box1", 10, scene);
-            box1.position = new BABYLON.Vector3(0, 0, -80);
-            box1.material = new BABYLON.StandardMaterial('texture1', scene);
-            box1.material.diffuseColor = new BABYLON.Color3(1, 1, 0);
-            box1.material.diffuseTexture =
-                new BABYLON.Texture("https://playground.babylonjs.com/textures/earth.jpg", scene);
             // BABYLON.SceneLoader.Append("https://www.babylonjs.com/Assets/NeonPipe/glTF/",
             //  "NeonPipe.gltf", scene);
             // TODO removing glow deletes a mesh - fix bug
@@ -166,13 +158,20 @@
                 BABYLON.Animation.ANIMATIONTYPE_VECTOR3, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
 
             async function sendPower(e) {
-                var bullet = BABYLON.Mesh.CreateSphere('bullet', 3, 3, scene);
                 var startPos = camera.position;
+                var bullet = BABYLON.Mesh.CreateSphere('bullet', 16, 4, scene);
                 bullet.checkCollisions = true;
+                bullet.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
 
                 bullet.position = new BABYLON.Vector3(0, 0, -80);
                 bullet.material = new BABYLON.StandardMaterial('bullettexture1', scene);
-                bullet.material.diffuseColor = new BABYLON.Color3(0, 0, 1);
+                bullet.material.diffuseColor = BABYLON.Color3.White();
+                bullet.material.diffuseTexture =
+                    new BABYLON.Texture("textures/light.jpg", scene);
+                bullet.material.diffuseTexture.hasAlpha = true;
+                bullet.material.useAlphaFromDiffuseTexture = true;
+                bullet.material.emissiveColor = BABYLON.Color3.White();
+                bullet.material.disableLighting = false;
 
                 var keys = [];
                 keys.push({
@@ -202,10 +201,18 @@
 
         function showAgents(agentPositions, scene) {
             agentPositions.forEach((position, index) => {
-                var agent = BABYLON.Mesh.CreateSphere(`agent${index}`, 30, 3, scene);
+                var agent = BABYLON.Mesh.CreateBox(`agent${index}`, 5, scene);
                 agent.position = position;
                 agent.material = new BABYLON.StandardMaterial(`agent${index}`, scene);
-                agent.material.diffuseColor = new BABYLON.Color3(1, 0.5, 0);
+                agent.material.diffuseColor = new BABYLON.Color3.White();
+                agent.material.diffuseTexture =
+                    new BABYLON.Texture("textures/agent.jpeg", scene);
+                agent.material.diffuseTexture.hasAlpha = true;
+                agent.material.useAlphaFromDiffuseTexture = true;
+                agent.material.emissiveColor = BABYLON.Color3.White();
+                agent.material.disableLighting = true;
+                agent.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
+
             });
         }
     </script>

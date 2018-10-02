@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Agent 404</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        html,
+        body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+    </style>
+
+    <!-- <script src="https://cdn.babylonjs.com/babylon.js"></script> -->
+    <script src="https://preview.babylonjs.com/babylon.js"></script>
+    <script src="https://preview.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <script src="https://code.jquery.com/pep/0.4.3/pep.js"></script>
+</head>
+
+<body>
+    <canvas id="renderCanvas" touch-action="none"></canvas> //touch-action="none" for best results from PEP
+    <script>
+        // https://playground.babylonjs.com/#J7BL2G
+        var canvas = document.getElementById("renderCanvas"); // Get the canvas element
+        var engine = new BABYLON.Engine(canvas, true); // Generate the BABYLON 3D engine
+
+        const WIDTH = 270;
+        const HEIGHT = 200;
+        const TIME_TO_SHUTDOWN_MILLIS = 10 * 1000;
+        const StatusType = {
+            ONLINE: {
+                id: 0,
+                color: BABYLON.Color3.Green(),
+            },
+            SHUTTING_DOWN: {
+                id: 1,
+                color: BABYLON.Color3.Yellow(),
+            },
+            OFFLINE: {
+                id: 2,
+                color: BABYLON.Color3.Red(),
+            },
+        }
+        const agents = [
+            {
+                id: 0,
+                status: StatusType.ONLINE.id,
+                isShutdownInProgress: false,
+                position: new BABYLON.Vector3(-86, 10, 40),
+                lastStatusChangeTime: undefined,
+            },
+            {
+                id: 1,
+                status: StatusType.ONLINE.id,
+                isShutdownInProgress: false,
+                position: new BABYLON.Vector3(-66, 10, 60),
+                lastStatusChangeTime: undefined,
+            },
+            {
+                id: 2,
+                status: StatusType.ONLINE.id,
+                isShutdownInProgress: false,
+                position: new BABYLON.Vector3(-50, 10, 48),
+                lastStatusChangeTime: undefined,
+            },
+            {
+                id: 3,
+                status: StatusType.ONLINE.id,
+                isShutdownInProgress: false,
+                position: new BABYLON.Vector3(5, 10, 45),
+                lastStatusChangeTime: undefined,
+            },
+            {
+                id: 4,
+                status: StatusType.ONLINE.id,
+                isShutdownInProgress: false,
+                position: new BABYLON.Vector3(57, 10, 15),
+                lastStatusChangeTime: undefined,
+            },
+        ];
+        /******* Add the create scene function ******/
+        /******* End of the create scene function ******/
+
+        var scene = createScene(); //Call the createScene function
+
+        // Register a render loop to repeatedly render the scene
+        engine.runRenderLoop(function () {
+            scene.render();
+        });
+
+        // Watch for browser/canvas resize events
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+
+
+        function createScene() {
+
+
+            var scene = new BABYLON.Scene(engine);
+            // scene.debugLayer.show();
+            scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
+
+            // Light
+            var light = new BABYLON.HemisphericLight("HemiLight",
+                new BABYLON.Vector3(1, 1, 1), scene);
+
+            // Camera
+            var camera = new BABYLON.ArcRotateCamera("Camera",
+                -Math.PI / 2, 0, HEIGHT, BABYLON.Vector3.Zero(), scene);
+            camera.applyGravity = true;
+            // Enable Collisions
+            scene.collisionsEnabled = true;
+            camera.checkCollisions = true;
+
+            // Ground
+            var groundMaterial = new BABYLON.StandardMaterial("ground", scene);
+            groundMaterial.diffuseTexture = new BABYLON.Texture("https://playground.babylonjs.com/textures/earth.jpg", scene);
+
+            var ground = BABYLON.Mesh.CreateGroundFromHeightMap("ground", "https://playground.babylonjs.com/textures/worldHeightMap.jpg",
+                WIDTH, HEIGHT, 150, 0, 10, scene, false);
+            ground.material = groundMaterial;
+            ground.checkCollisions = true;
+
+            var crosshair = BABYLON.Mesh.CreateDisc("crosshair1", 8, 100, scene, false);
+            crosshair.position = new BABYLON.Vector3(20, 20, 20);
+            crosshair.material = new BABYLON.StandardMaterial('crosshair1', scene);
+            crosshair.material.diffuseColor = BABYLON.Color3.White();
+            crosshair.material.diffuseTexture =
+                new BABYLON.Texture("textures/favicon.png", scene);
+            crosshair.material.diffuseTexture.hasAlpha = true;
+            crosshair.material.useAlphaFromDiffuseTexture = true;
+            crosshair.material.emissiveColor = BABYLON.Color3.Red();
+            crosshair.material.disableLighting = true;
+            crosshair.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
+
+            // BABYLON.SceneLoader.Append("https://www.babylonjs.com/Assets/NeonPipe/glTF/",
+            //  "NeonPipe.gltf", scene);
+            // TODO removing glow deletes a mesh - fix bug
+            var gl = new BABYLON.GlowLayer("glow", scene, { mainTextureSamples: 5 });
+
+            showAgents(agents, scene);
+
+            scene.onDispose = function () {
+                document.removeEventListener("keydown", onKeyDown);
+                document.removeEventListener("keyup", onKeyUp);
+            }
+
+            var movestep = 2;
+
+            var onKeyDown = async function (event) {
+                var key = event.keyCode;
+                var ch = String.fromCharCode(key);
+                var moveVector = new BABYLON.Vector3(0, 0, 0);
+                switch (ch) {
+                    case "W":
+                        moveVector.z = movestep;
+                        crosshair.moveWithCollisions(moveVector);
+                        break;
+                    case "A":
+                        moveVector.x = -movestep;
+                        crosshair.moveWithCollisions(moveVector);
+                        break;
+                    case "S":
+                        moveVector.z = -movestep;
+                        crosshair.moveWithCollisions(moveVector);
+                        break;
+                    case "D":
+                        moveVector.x = movestep;
+                        crosshair.moveWithCollisions(moveVector);
+                        break;
+                    case " ":
+                        await sendPower(event);
+                        break;
+                }
+            };
+
+            var onKeyUp = function (event) {
+                /*
+                                var key = event.keyCode;
+                                var ch = String.fromCharCode(key);
+                                switch (key) {
+                                    case 16:
+                                        speed = 5;
+                                        break;
+                                }
+                */
+            };
+
+            document.addEventListener("keydown", onKeyDown, false);
+            document.addEventListener("keyup", onKeyUp, false);
+            var animationBox = new BABYLON.Animation("powerAnimation", "position", 30,
+                BABYLON.Animation.ANIMATIONTYPE_VECTOR3, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+
+            async function sendPower(e) {
+                var startPos = camera.position;
+                var power = BABYLON.Mesh.CreateSphere('power', 16, 4, scene);
+                power.checkCollisions = true;
+                power.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
+
+                power.position = new BABYLON.Vector3(0, 0, -80);
+                power.material = new BABYLON.StandardMaterial('powertexture1', scene);
+                power.material.diffuseColor = BABYLON.Color3.White();
+                power.material.diffuseTexture =
+                    new BABYLON.Texture("textures/light.jpg", scene);
+                power.material.diffuseTexture.hasAlpha = true;
+                power.material.useAlphaFromDiffuseTexture = true;
+                power.material.emissiveColor = BABYLON.Color3.White();
+                power.material.disableLighting = false;
+
+                var keys = [];
+                keys.push({
+                    frame: 0,
+                    value: new BABYLON.Vector3(0, 0, -80),
+                });
+                keys.push({
+                    frame: 30,
+                    value: new BABYLON.Vector3(crosshair.position.x, crosshair.position.y, crosshair.position.z)
+                });
+                animationBox.setKeys(keys);
+                power.animations = [];
+                power.animations.push(animationBox);
+                var anim = scene.beginAnimation(power, 0, 100, false);
+                await anim.waitAsync();
+                power.dispose();
+            };
+
+            scene.registerBeforeRender(function () {
+                agents.forEach((agentDetail, index) => {
+                    const time = Date.now();
+                    if (time % 1000 < 500) {
+                        agentDetail.mesh.material.alpha = 0;
+                    }
+                    else {
+                        agentDetail.mesh.material.alpha = 1;
+                    }
+                    if (isAgentShuttingDown(agentDetail) && didShutdownComplete(agentDetail)) {
+                        shutdownAgent(agentDetail);
+                    }
+                });
+            });
+
+            window.addEventListener('resize', function () {
+                engine.resize();
+            });
+            return scene;
+        }
+
+        function showAgents(agents, scene) {
+            agents.forEach((agentDetail, index) => {
+                var agent = BABYLON.Mesh.CreateBox(`agent${index}`, 5, scene);
+                agent.position = agentDetail.position;
+                agent.material = new BABYLON.StandardMaterial(`agent${index}`, scene);
+                agent.material.diffuseColor = new BABYLON.Color3.White();
+                agent.material.diffuseTexture =
+                    new BABYLON.Texture("textures/agent.jpeg", scene);
+                agent.material.diffuseTexture.hasAlpha = true;
+                agent.material.useAlphaFromDiffuseTexture = true;
+                const isShuttingDown = Math.random() > 0.5;
+                if (isShuttingDown) {
+                    agent.material.emissiveColor = StatusType.SHUTTING_DOWN.color;
+                    agentDetail.isShutdownInProgress = true;
+                    agentDetail.lastStatusChangeTime = Date.now();
+                    agentDetail.status = StatusType.SHUTTING_DOWN.id;
+                }
+                else {
+                    agent.material.emissiveColor = StatusType.ONLINE.color;
+                }
+                agent.material.disableLighting = true;
+                agent.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
+                agentDetail.mesh = agent;
+            });
+        }
+
+        function isAgentOffline(agent) {
+            return agent.status === StatusType.OFFLINE.id;
+        }
+
+        function isAgentShuttingDown(agent) {
+            return agent.status === StatusType.SHUTTING_DOWN.id && !isAgentOffline(agent);
+        }
+
+        function didShutdownComplete(agent) {
+            return (Date.now() - agent.lastStatusChangeTime) > TIME_TO_SHUTDOWN_MILLIS;
+        }
+
+        function shutdownAgent(agent) {
+            agent.status = StatusType.OFFLINE.id;
+            agent.mesh.material.emissiveColor = StatusType.OFFLINE.color;
+            agent.isShutdownInProgress = false;
+            agent.lastStatusChangeTime = Date.now();
+        }
+    </script>
+</body>
+
+</html>

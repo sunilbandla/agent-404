@@ -38,7 +38,21 @@
 
         const WIDTH = 270;
         const HEIGHT = 200;
-        const TIME_TO_SHUTDOWN_MILLIS = 10 * 1000;
+        const TIME_TO_SHUTDOWN_MILLIS = 20 * 1000;
+        const TIME_TO_UPDATE_STATUS_MILLIS = 15 * 1000;
+        let statusUpdateTimeoutId = undefined;
+        const GameStatusType = {
+            NOT_STARTED: {
+                id: 0,
+            },
+            IN_PROGRESS: {
+                id: 1,
+            },
+            ENDED: {
+                id: 2,
+            },
+        }
+        let gameStatus = GameStatusType.NOT_STARTED.id;
         const StatusType = {
             ONLINE: {
                 id: 0,
@@ -237,25 +251,58 @@
                 power.dispose();
             };
 
+            gameStatus = GameStatusType.IN_PROGRESS.id;
+            updateStatuses();
             scene.registerBeforeRender(function () {
-                agents.forEach((agentDetail, index) => {
-                    const time = Date.now();
-                    if (time % 1000 < 500) {
-                        agentDetail.mesh.material.alpha = 0;
-                    }
-                    else {
-                        agentDetail.mesh.material.alpha = 1;
-                    }
-                    if (isAgentShuttingDown(agentDetail) && didShutdownComplete(agentDetail)) {
-                        shutdownAgent(agentDetail);
-                    }
-                });
+                if (!isGameInProgress(gameStatus)) {
+                    return;
+                }
+                scheduleStatusUpdates();
+                blinkAgents();
             });
 
             window.addEventListener('resize', function () {
                 engine.resize();
             });
             return scene;
+        }
+
+        function scheduleStatusUpdates() {
+            if (statusUpdateTimeoutId) {
+                return;
+            }
+            statusUpdateTimeoutId = setTimeout(updateStatuses, TIME_TO_UPDATE_STATUS_MILLIS);
+        }
+
+        function updateStatuses() {
+            if (!isGameInProgress(gameStatus)) {
+                return;
+            }
+            agents.forEach(agentDetail => {
+                const shouldStartShutdown = Math.random() > 0.5;
+                if (!shouldStartShutdown) {
+                    return;
+                }
+                if (isAgentOnline(agentDetail)) {
+                    startShuttingDown(agentDetail);
+                }
+                else if (isAgentShuttingDown(agentDetail) && didShutdownIntervalComplete(agentDetail)) {
+                    shutdownAgent(agentDetail);
+                }
+            });
+            statusUpdateTimeoutId = undefined;
+        }
+
+        function blinkAgents() {
+            agents.forEach((agentDetail, index) => {
+                const isTimeToBlink = Date.now() % 1000 < 500;
+                if (isTimeToBlink && isAgentShuttingDown(agentDetail)) {
+                    agentDetail.mesh.material.alpha = 0;
+                }
+                else {
+                    agentDetail.mesh.material.alpha = 1;
+                }
+            });
         }
 
         function showAgents(agents, scene) {
@@ -268,32 +315,38 @@
                     new BABYLON.Texture("textures/agent.jpeg", scene);
                 agent.material.diffuseTexture.hasAlpha = true;
                 agent.material.useAlphaFromDiffuseTexture = true;
-                const isShuttingDown = Math.random() > 0.5;
-                if (isShuttingDown) {
-                    agent.material.emissiveColor = StatusType.SHUTTING_DOWN.color;
-                    agentDetail.isShutdownInProgress = true;
-                    agentDetail.lastStatusChangeTime = Date.now();
-                    agentDetail.status = StatusType.SHUTTING_DOWN.id;
-                }
-                else {
-                    agent.material.emissiveColor = StatusType.ONLINE.color;
-                }
+                agent.material.emissiveColor = StatusType.ONLINE.color;
                 agent.material.disableLighting = true;
                 agent.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
                 agentDetail.mesh = agent;
             });
         }
 
+        function isGameInProgress(gameStatus) {
+            return gameStatus === GameStatusType.IN_PROGRESS.id;
+        }
+
         function isAgentOffline(agent) {
             return agent.status === StatusType.OFFLINE.id;
+        }
+
+        function isAgentOnline(agent) {
+            return agent.status === StatusType.ONLINE.id;
         }
 
         function isAgentShuttingDown(agent) {
             return agent.status === StatusType.SHUTTING_DOWN.id && !isAgentOffline(agent);
         }
 
-        function didShutdownComplete(agent) {
+        function didShutdownIntervalComplete(agent) {
             return (Date.now() - agent.lastStatusChangeTime) > TIME_TO_SHUTDOWN_MILLIS;
+        }
+
+        function startShuttingDown(agentDetail) {
+            agentDetail.mesh.material.emissiveColor = StatusType.SHUTTING_DOWN.color;
+            agentDetail.isShutdownInProgress = true;
+            agentDetail.lastStatusChangeTime = Date.now();
+            agentDetail.status = StatusType.SHUTTING_DOWN.id;
         }
 
         function shutdownAgent(agent) {

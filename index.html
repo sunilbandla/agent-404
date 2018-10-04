@@ -21,15 +21,55 @@
             height: 100%;
             touch-action: none;
         }
+
+        .helper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background-color: darkgray;
+            width: 100%;
+            display: none;
+        }
+        .helper .body {
+            background-color: white;
+            margin: 100px auto;
+            text-align: center;
+            max-width: 80%;
+            font-weight: 400;
+            font-size: 28px;
+            font-family: monospace;
+            border: 2px solid gray;
+            border-radius: 10px;
+            box-shadow: 4px 4px gray;
+            padding: 50px;
+        }
+        .helper button {
+            margin: 50px;
+            padding: 20px;
+            border-radius: 15px;
+            font-size: 40px;
+            font-weight: 400;
+            cursor: pointer;
+        }
     </style>
 
     <!-- <script src="https://cdn.babylonjs.com/babylon.js"></script> -->
     <script src="https://preview.babylonjs.com/babylon.js"></script>
     <script src="https://preview.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
     <script src="https://code.jquery.com/pep/0.4.3/pep.js"></script>
+    <script src="./utils.js"></script>
 </head>
 
 <body>
+    <div class="helper">
+        <div class="body">
+            <div class="text">
+                Move target over agents and give them power by hitting space.
+            </div>
+            <button type="button" onclick="closeHelperAndStartGame()">Start game</button>
+        </div>
+    </div>
     <canvas id="renderCanvas" touch-action="none"></canvas> //touch-action="none" for best results from PEP
     <script>
         // https://playground.babylonjs.com/#J7BL2G
@@ -38,7 +78,30 @@
 
         const WIDTH = 270;
         const HEIGHT = 200;
-        const TIME_TO_SHUTDOWN_MILLIS = 10 * 1000;
+        const AGENT_ALTITUDE = 5;
+        const AGENT_HEIGHT = 5;
+        const TIME_TO_SHUTDOWN_MILLIS = 15 * 1000;
+        const TIME_TO_UPDATE_STATUS_MILLIS = 10 * 1000;
+        const CROSSHAIR_SIZE_REDUCER_INTERVAL_MILLIS = 3 * 1000;
+        const MOVE_STEP = 2.5;
+        const MIN_TARGET_SIZE = 2;
+        const MAX_TARGET_SIZE = 8;
+        const CROSSHAIR_SIZE_DECREMENT_STEP = 0.5;
+        let statusUpdateTimeoutId = undefined;
+        let crosshairSizeReducerTimeoutId = undefined;
+        let currentCrosshairSize = MAX_TARGET_SIZE;
+        const GameStatusType = {
+            NOT_STARTED: {
+                id: 0,
+            },
+            IN_PROGRESS: {
+                id: 1,
+            },
+            ENDED: {
+                id: 2,
+            },
+        }
+        let gameStatus = GameStatusType.NOT_STARTED.id;
         const StatusType = {
             ONLINE: {
                 id: 0,
@@ -58,35 +121,35 @@
                 id: 0,
                 status: StatusType.ONLINE.id,
                 isShutdownInProgress: false,
-                position: new BABYLON.Vector3(-86, 10, 40),
+                position: new BABYLON.Vector3(-86, AGENT_ALTITUDE, 40),
                 lastStatusChangeTime: undefined,
             },
             {
                 id: 1,
                 status: StatusType.ONLINE.id,
                 isShutdownInProgress: false,
-                position: new BABYLON.Vector3(-66, 10, 60),
+                position: new BABYLON.Vector3(-66, AGENT_ALTITUDE, 60),
                 lastStatusChangeTime: undefined,
             },
             {
                 id: 2,
                 status: StatusType.ONLINE.id,
                 isShutdownInProgress: false,
-                position: new BABYLON.Vector3(-50, 10, 48),
+                position: new BABYLON.Vector3(-50, AGENT_ALTITUDE, 48),
                 lastStatusChangeTime: undefined,
             },
             {
                 id: 3,
                 status: StatusType.ONLINE.id,
                 isShutdownInProgress: false,
-                position: new BABYLON.Vector3(5, 10, 45),
+                position: new BABYLON.Vector3(5, AGENT_ALTITUDE, 45),
                 lastStatusChangeTime: undefined,
             },
             {
                 id: 4,
                 status: StatusType.ONLINE.id,
                 isShutdownInProgress: false,
-                position: new BABYLON.Vector3(57, 10, 15),
+                position: new BABYLON.Vector3(57, AGENT_ALTITUDE, 15),
                 lastStatusChangeTime: undefined,
             },
         ];
@@ -111,6 +174,7 @@
 
             var scene = new BABYLON.Scene(engine);
             // scene.debugLayer.show();
+            scene.showFps();
             scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
 
             // Light
@@ -121,6 +185,12 @@
             var camera = new BABYLON.ArcRotateCamera("Camera",
                 -Math.PI / 2, 0, HEIGHT, BABYLON.Vector3.Zero(), scene);
             camera.applyGravity = true;
+            camera.attachControl(canvas, true);
+            camera.lowerBetaLimit = 0.2;
+            camera.upperBetaLimit = (Math.PI / 3) * 0.99;
+            // camera.radius = 180;
+            camera.lowerRadiusLimit = 120;
+            camera.upperRadiusLimit = 200;
             // Enable Collisions
             scene.collisionsEnabled = true;
             camera.checkCollisions = true;
@@ -134,8 +204,20 @@
             ground.material = groundMaterial;
             ground.checkCollisions = true;
 
-            var crosshair = BABYLON.Mesh.CreateDisc("crosshair1", 8, 100, scene, false);
-            crosshair.position = new BABYLON.Vector3(20, 20, 20);
+            if (wasHelperShown()) {
+                return startGame(scene);
+            }
+            else {
+                showHelpText();
+            }
+
+            return scene;
+        }
+
+        function startGame(scene) {
+
+            var crosshair = BABYLON.Mesh.CreateDisc("crosshair1", MAX_TARGET_SIZE, 100, scene, false);
+            crosshair.position = new BABYLON.Vector3(20, AGENT_ALTITUDE + AGENT_HEIGHT/2, 20);
             crosshair.material = new BABYLON.StandardMaterial('crosshair1', scene);
             crosshair.material.diffuseColor = BABYLON.Color3.White();
             crosshair.material.diffuseTexture =
@@ -158,27 +240,25 @@
                 document.removeEventListener("keyup", onKeyUp);
             }
 
-            var movestep = 2;
-
             var onKeyDown = async function (event) {
                 var key = event.keyCode;
                 var ch = String.fromCharCode(key);
                 var moveVector = new BABYLON.Vector3(0, 0, 0);
                 switch (ch) {
                     case "W":
-                        moveVector.z = movestep;
+                        moveVector.z = MOVE_STEP;
                         crosshair.moveWithCollisions(moveVector);
                         break;
                     case "A":
-                        moveVector.x = -movestep;
+                        moveVector.x = -MOVE_STEP;
                         crosshair.moveWithCollisions(moveVector);
                         break;
                     case "S":
-                        moveVector.z = -movestep;
+                        moveVector.z = -MOVE_STEP;
                         crosshair.moveWithCollisions(moveVector);
                         break;
                     case "D":
-                        moveVector.x = movestep;
+                        moveVector.x = MOVE_STEP;
                         crosshair.moveWithCollisions(moveVector);
                         break;
                     case " ":
@@ -214,11 +294,11 @@
                 power.material = new BABYLON.StandardMaterial('powertexture1', scene);
                 power.material.diffuseColor = BABYLON.Color3.White();
                 power.material.diffuseTexture =
-                    new BABYLON.Texture("textures/light.jpg", scene);
+                    new BABYLON.Texture("textures/light.jpeg", scene);
                 power.material.diffuseTexture.hasAlpha = true;
-                power.material.useAlphaFromDiffuseTexture = true;
-                power.material.emissiveColor = BABYLON.Color3.White();
-                power.material.disableLighting = false;
+                // power.material.useAlphaFromDiffuseTexture = true;
+                power.material.emissiveColor = BABYLON.Color3.Green();
+                power.material.disableLighting = true;
 
                 var keys = [];
                 keys.push({
@@ -232,24 +312,24 @@
                 animationBox.setKeys(keys);
                 power.animations = [];
                 power.animations.push(animationBox);
+                const isAgentHit = isTargetOnAgent(crosshair);
                 var anim = scene.beginAnimation(power, 0, 100, false);
                 await anim.waitAsync();
+                if (isAgentHit >= 0) {
+                    makeAgentAtIndexOnline(isAgentHit);
+                }
                 power.dispose();
             };
 
+            gameStatus = GameStatusType.IN_PROGRESS.id;
+            updateStatuses();
+            crosshairSizeReducerTimeoutId = scheduleCrosshairSizeReducer(crosshair);
             scene.registerBeforeRender(function () {
-                agents.forEach((agentDetail, index) => {
-                    const time = Date.now();
-                    if (time % 1000 < 500) {
-                        agentDetail.mesh.material.alpha = 0;
-                    }
-                    else {
-                        agentDetail.mesh.material.alpha = 1;
-                    }
-                    if (isAgentShuttingDown(agentDetail) && didShutdownComplete(agentDetail)) {
-                        shutdownAgent(agentDetail);
-                    }
-                });
+                if (!isGameInProgress(gameStatus)) {
+                    return;
+                }
+                scheduleStatusUpdates();
+                blinkAgents();
             });
 
             window.addEventListener('resize', function () {
@@ -258,9 +338,91 @@
             return scene;
         }
 
+        function showHelpText() {
+            const helperEl = document.getElementsByClassName('helper')[0];
+            helperEl.style.display = 'block';
+        }
+
+        function wasHelperShown() {
+            return !!sessionStorage.getItem('agent404-helper-done');
+        }
+
+        function finishHelper() {
+            sessionStorage.setItem('agent404-helper-done', 'true');
+        }
+
+        function closeHelper() {
+            const helperEl = document.getElementsByClassName('helper')[0];
+            helperEl.style.display = 'none';
+        }
+
+        function closeHelperAndStartGame() {
+            finishHelper();
+            closeHelper();
+            startGame(scene);
+        }
+
+        function isTargetOnAgent(target) {
+            return agents.findIndex(agentDetail => {
+                return (target.intersectsMesh(agentDetail.mesh, false));
+            })
+        }
+
+        function scheduleCrosshairSizeReducer(crosshair) {
+            return setInterval(() => {
+                if (currentCrosshairSize > MIN_TARGET_SIZE) {
+                    currentCrosshairSize -= CROSSHAIR_SIZE_DECREMENT_STEP;
+                    crosshair.scaling.x = 1 - 1/currentCrosshairSize;
+                    crosshair.scaling.y = 1 - 1/currentCrosshairSize;
+                    crosshair.scaling.z = 1 - 1/currentCrosshairSize;
+                }
+                else {
+                    clearInterval(crosshairSizeReducerTimeoutId);
+                }
+            }, CROSSHAIR_SIZE_REDUCER_INTERVAL_MILLIS);
+        }
+
+        function scheduleStatusUpdates() {
+            if (statusUpdateTimeoutId) {
+                return;
+            }
+            statusUpdateTimeoutId = setTimeout(updateStatuses, TIME_TO_UPDATE_STATUS_MILLIS);
+        }
+
+        function updateStatuses() {
+            if (!isGameInProgress(gameStatus)) {
+                return;
+            }
+            agents.forEach(agentDetail => {
+                const shouldStartShutdown = Math.random() > 0.5;
+                if (!shouldStartShutdown) {
+                    return;
+                }
+                if (isAgentOnline(agentDetail)) {
+                    startShuttingDown(agentDetail);
+                }
+                else if (isAgentShuttingDown(agentDetail) && didShutdownIntervalComplete(agentDetail)) {
+                    shutdownAgent(agentDetail);
+                }
+            });
+            statusUpdateTimeoutId = undefined;
+        }
+
+        function blinkAgents() {
+            agents.forEach((agentDetail, index) => {
+                const isTimeToBlink = Date.now() % 1000 < 500;
+                if (isTimeToBlink && isAgentShuttingDown(agentDetail)) {
+                    agentDetail.mesh.material.alpha = 0;
+                }
+                else {
+                    agentDetail.mesh.material.alpha = 1;
+                }
+            });
+        }
+
         function showAgents(agents, scene) {
             agents.forEach((agentDetail, index) => {
-                var agent = BABYLON.Mesh.CreateBox(`agent${index}`, 5, scene);
+                var agent = BABYLON.Mesh.CreateBox(`agent${index}`, AGENT_HEIGHT, scene);
                 agent.position = agentDetail.position;
                 agent.material = new BABYLON.StandardMaterial(`agent${index}`, scene);
                 agent.material.diffuseColor = new BABYLON.Color3.White();
@@ -268,32 +430,50 @@
                     new BABYLON.Texture("textures/agent.jpeg", scene);
                 agent.material.diffuseTexture.hasAlpha = true;
                 agent.material.useAlphaFromDiffuseTexture = true;
-                const isShuttingDown = Math.random() > 0.5;
-                if (isShuttingDown) {
-                    agent.material.emissiveColor = StatusType.SHUTTING_DOWN.color;
-                    agentDetail.isShutdownInProgress = true;
-                    agentDetail.lastStatusChangeTime = Date.now();
-                    agentDetail.status = StatusType.SHUTTING_DOWN.id;
-                }
-                else {
-                    agent.material.emissiveColor = StatusType.ONLINE.color;
-                }
+                agent.material.emissiveColor = StatusType.ONLINE.color;
                 agent.material.disableLighting = true;
                 agent.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
+                // agent.checkCollisions = true;
                 agentDetail.mesh = agent;
             });
+        }
+
+        function isGameInProgress(gameStatus) {
+            return gameStatus === GameStatusType.IN_PROGRESS.id;
         }
 
         function isAgentOffline(agent) {
             return agent.status === StatusType.OFFLINE.id;
         }
 
+        function isAgentOnline(agent) {
+            return agent.status === StatusType.ONLINE.id;
+        }
+
         function isAgentShuttingDown(agent) {
             return agent.status === StatusType.SHUTTING_DOWN.id && !isAgentOffline(agent);
         }
 
-        function didShutdownComplete(agent) {
+        function didShutdownIntervalComplete(agent) {
             return (Date.now() - agent.lastStatusChangeTime) > TIME_TO_SHUTDOWN_MILLIS;
+        }
+
+        function startShuttingDown(agentDetail) {
+            agentDetail.mesh.material.emissiveColor = StatusType.SHUTTING_DOWN.color;
+            agentDetail.isShutdownInProgress = true;
+            agentDetail.lastStatusChangeTime = Date.now();
+            agentDetail.status = StatusType.SHUTTING_DOWN.id;
+        }
+
+        function makeAgentAtIndexOnline(agentIndex) {
+            const agent = agents[agentIndex];
+            if (!isAgentShuttingDown(agent)) {
+                return;
+            }
+            agent.status = StatusType.ONLINE.id;
+            agent.mesh.material.emissiveColor = StatusType.ONLINE.color;
+            agent.isShutdownInProgress = false;
+            agent.lastStatusChangeTime = Date.now();
         }
 
         function shutdownAgent(agent) {

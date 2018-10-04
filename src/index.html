@@ -243,11 +243,11 @@
                 power.material = new BABYLON.StandardMaterial('powertexture1', scene);
                 power.material.diffuseColor = BABYLON.Color3.White();
                 power.material.diffuseTexture =
-                    new BABYLON.Texture("textures/light.jpg", scene);
+                    new BABYLON.Texture("textures/light.jpeg", scene);
                 power.material.diffuseTexture.hasAlpha = true;
-                power.material.useAlphaFromDiffuseTexture = true;
-                power.material.emissiveColor = BABYLON.Color3.White();
-                power.material.disableLighting = false;
+                // power.material.useAlphaFromDiffuseTexture = true;
+                power.material.emissiveColor = BABYLON.Color3.Green();
+                power.material.disableLighting = true;
 
                 var keys = [];
                 keys.push({

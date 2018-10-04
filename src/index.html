@@ -27,6 +27,7 @@
     <script src="https://preview.babylonjs.com/babylon.js"></script>
     <script src="https://preview.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
     <script src="https://code.jquery.com/pep/0.4.3/pep.js"></script>
+    <script src="./utils.js"></script>
 </head>
 
 <body>
@@ -38,9 +39,16 @@
 
         const WIDTH = 270;
         const HEIGHT = 200;
-        const TIME_TO_SHUTDOWN_MILLIS = 20 * 1000;
-        const TIME_TO_UPDATE_STATUS_MILLIS = 15 * 1000;
+        const TIME_TO_SHUTDOWN_MILLIS = 15 * 1000;
+        const TIME_TO_UPDATE_STATUS_MILLIS = 10 * 1000;
+        const CROSSHAIR_SIZE_REDUCER_INTERVAL_MILLIS = 3 * 1000;
+        const MOVE_STEP = 2.5;
+        const MIN_TARGET_SIZE = 2;
+        const MAX_TARGET_SIZE = 8;
+        const CROSSHAIR_SIZE_DECREMENT_STEP = 0.5;
         let statusUpdateTimeoutId = undefined;
+        let crosshairSizeReducerTimeoutId = undefined;
+        let currentCrosshairSize = MAX_TARGET_SIZE;
         const GameStatusType = {
             NOT_STARTED: {
                 id: 0,
@@ -125,6 +133,7 @@
 
             var scene = new BABYLON.Scene(engine);
             // scene.debugLayer.show();
+            scene.showFps();
             scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
 
             // Light
@@ -148,8 +157,8 @@
             ground.material = groundMaterial;
             ground.checkCollisions = true;
 
-            var crosshair = BABYLON.Mesh.CreateDisc("crosshair1", 8, 100, scene, false);
-            crosshair.position = new BABYLON.Vector3(20, 20, 20);
+            var crosshair = BABYLON.Mesh.CreateDisc("crosshair1", MAX_TARGET_SIZE, 100, scene, false);
+            crosshair.position = new BABYLON.Vector3(20, 10, 20);
             crosshair.material = new BABYLON.StandardMaterial('crosshair1', scene);
             crosshair.material.diffuseColor = BABYLON.Color3.White();
             crosshair.material.diffuseTexture =
@@ -172,27 +181,25 @@
                 document.removeEventListener("keyup", onKeyUp);
             }
 
-            var movestep = 2;
-
             var onKeyDown = async function (event) {
                 var key = event.keyCode;
                 var ch = String.fromCharCode(key);
                 var moveVector = new BABYLON.Vector3(0, 0, 0);
                 switch (ch) {
                     case "W":
-                        moveVector.z = movestep;
+                        moveVector.z = MOVE_STEP;
                         crosshair.moveWithCollisions(moveVector);
                         break;
                     case "A":
-                        moveVector.x = -movestep;
+                        moveVector.x = -MOVE_STEP;
                         crosshair.moveWithCollisions(moveVector);
                         break;
                     case "S":
-                        moveVector.z = -movestep;
+                        moveVector.z = -MOVE_STEP;
                         crosshair.moveWithCollisions(moveVector);
                         break;
                     case "D":
-                        moveVector.x = movestep;
+                        moveVector.x = MOVE_STEP;
                         crosshair.moveWithCollisions(moveVector);
                         break;
                     case " ":
@@ -246,13 +253,18 @@
                 animationBox.setKeys(keys);
                 power.animations = [];
                 power.animations.push(animationBox);
+                const isAgentHit = isTargetOnAgent(crosshair);
                 var anim = scene.beginAnimation(power, 0, 100, false);
                 await anim.waitAsync();
+                if (isAgentHit >= 0) {
+                    makeAgentAtIndexOnline(isAgentHit);
+                }
                 power.dispose();
             };
 
             gameStatus = GameStatusType.IN_PROGRESS.id;
             updateStatuses();
+            crosshairSizeReducerTimeoutId = scheduleCrosshairSizeReducer(crosshair);
             scene.registerBeforeRender(function () {
                 if (!isGameInProgress(gameStatus)) {
                     return;
@@ -265,6 +277,26 @@
                 engine.resize();
             });
             return scene;
+        }
+
+        function isTargetOnAgent(target) {
+            return agents.findIndex(agentDetail => {
+                return (target.intersectsMesh(agentDetail.mesh, false));
+            })
+        }
+
+        function scheduleCrosshairSizeReducer(crosshair) {
+            return setInterval(() => {
+                if (currentCrosshairSize > MIN_TARGET_SIZE) {
+                    currentCrosshairSize -= CROSSHAIR_SIZE_DECREMENT_STEP;
+                    crosshair.scaling.x = 1 - 1/currentCrosshairSize;
+                    crosshair.scaling.y = 1 - 1/currentCrosshairSize;
+                    crosshair.scaling.z = 1 - 1/currentCrosshairSize;
+                }
+                else {
+                    clearInterval(crosshairSizeReducerTimeoutId);
+                }
+            }, CROSSHAIR_SIZE_REDUCER_INTERVAL_MILLIS);
         }
 
         function scheduleStatusUpdates() {
@@ -318,6 +350,7 @@
                 agent.material.emissiveColor = StatusType.ONLINE.color;
                 agent.material.disableLighting = true;
                 agent.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
+                // agent.checkCollisions = true;
                 agentDetail.mesh = agent;
             });
         }
@@ -347,6 +380,17 @@
             agentDetail.isShutdownInProgress = true;
             agentDetail.lastStatusChangeTime = Date.now();
             agentDetail.status = StatusType.SHUTTING_DOWN.id;
+        }
+
+        function makeAgentAtIndexOnline(agentIndex) {
+            const agent = agents[agentIndex];
+            if (!isAgentShuttingDown(agent)) {
+                return;
+            }
+            agent.status = StatusType.ONLINE.id;
+            agent.mesh.material.emissiveColor = StatusType.ONLINE.color;
+            agent.isShutdownInProgress = false;
+            agent.lastStatusChangeTime = Date.now();
         }
 
         function shutdownAgent(agent) {

@@ -39,6 +39,8 @@
 
         const WIDTH = 270;
         const HEIGHT = 200;
+        const AGENT_ALTITUDE = 5;
+        const AGENT_HEIGHT = 5;
         const TIME_TO_SHUTDOWN_MILLIS = 15 * 1000;
         const TIME_TO_UPDATE_STATUS_MILLIS = 10 * 1000;
         const CROSSHAIR_SIZE_REDUCER_INTERVAL_MILLIS = 3 * 1000;
@@ -80,35 +82,35 @@
                 id: 0,
                 status: StatusType.ONLINE.id,
                 isShutdownInProgress: false,
-                position: new BABYLON.Vector3(-86, 10, 40),
+                position: new BABYLON.Vector3(-86, AGENT_ALTITUDE, 40),
                 lastStatusChangeTime: undefined,
             },
             {
                 id: 1,
                 status: StatusType.ONLINE.id,
                 isShutdownInProgress: false,
-                position: new BABYLON.Vector3(-66, 10, 60),
+                position: new BABYLON.Vector3(-66, AGENT_ALTITUDE, 60),
                 lastStatusChangeTime: undefined,
             },
             {
                 id: 2,
                 status: StatusType.ONLINE.id,
                 isShutdownInProgress: false,
-                position: new BABYLON.Vector3(-50, 10, 48),
+                position: new BABYLON.Vector3(-50, AGENT_ALTITUDE, 48),
                 lastStatusChangeTime: undefined,
             },
             {
                 id: 3,
                 status: StatusType.ONLINE.id,
                 isShutdownInProgress: false,
-                position: new BABYLON.Vector3(5, 10, 45),
+                position: new BABYLON.Vector3(5, AGENT_ALTITUDE, 45),
                 lastStatusChangeTime: undefined,
             },
             {
                 id: 4,
                 status: StatusType.ONLINE.id,
                 isShutdownInProgress: false,
-                position: new BABYLON.Vector3(57, 10, 15),
+                position: new BABYLON.Vector3(57, AGENT_ALTITUDE, 15),
                 lastStatusChangeTime: undefined,
             },
         ];
@@ -144,6 +146,12 @@
             var camera = new BABYLON.ArcRotateCamera("Camera",
                 -Math.PI / 2, 0, HEIGHT, BABYLON.Vector3.Zero(), scene);
             camera.applyGravity = true;
+            camera.attachControl(canvas, true);
+            camera.lowerBetaLimit = 0.2;
+            camera.upperBetaLimit = (Math.PI / 3) * 0.99;
+            // camera.radius = 180;
+            camera.lowerRadiusLimit = 120;
+            camera.upperRadiusLimit = 200;
             // Enable Collisions
             scene.collisionsEnabled = true;
             camera.checkCollisions = true;
@@ -158,7 +166,7 @@
             ground.checkCollisions = true;
 
             var crosshair = BABYLON.Mesh.CreateDisc("crosshair1", MAX_TARGET_SIZE, 100, scene, false);
-            crosshair.position = new BABYLON.Vector3(20, 10, 20);
+            crosshair.position = new BABYLON.Vector3(20, AGENT_ALTITUDE + AGENT_HEIGHT/2, 20);
             crosshair.material = new BABYLON.StandardMaterial('crosshair1', scene);
             crosshair.material.diffuseColor = BABYLON.Color3.White();
             crosshair.material.diffuseTexture =
@@ -339,7 +347,7 @@
 
         function showAgents(agents, scene) {
             agents.forEach((agentDetail, index) => {
-                var agent = BABYLON.Mesh.CreateBox(`agent${index}`, 5, scene);
+                var agent = BABYLON.Mesh.CreateBox(`agent${index}`, AGENT_HEIGHT, scene);
                 agent.position = agentDetail.position;
                 agent.material = new BABYLON.StandardMaterial(`agent${index}`, scene);
                 agent.material.diffuseColor = new BABYLON.Color3.White();
